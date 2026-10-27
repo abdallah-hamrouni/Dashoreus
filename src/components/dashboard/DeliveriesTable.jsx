@@ -1,80 +1,176 @@
+import { useState } from "react";
+import Icon from "../ui/Icon";
+import { formatDeliveryDate } from "../../utils/dashboardMetrics";
 import EmptyState from "./EmptyState";
 
-export default function DeliveriesTable({ deliveries }) {
-  if (deliveries.length === 0) {
-    return (
-      <EmptyState text="Aucune livraison disponible pour cet établissement." />
-    );
-  }
-
+export default function DeliveriesTable({
+  livraisons = [],
+  onGeneratePdf,
+  loadingPdfId,
+  title = "Historique des livraisons",
+  action,
+  children,
+  emptyText = "Les livraisons de cet établissement apparaîtront ici.",
+}) {
+  const [requestedPage, setRequestedPage] = useState(1);
+  const pageSize = 8;
+  const totalPages = Math.max(1, Math.ceil(livraisons.length / pageSize));
+  const page = Math.min(requestedPage, totalPages);
+  const offset = (page - 1) * pageSize;
+  const visible = livraisons.slice(offset, offset + pageSize);
   return (
-    <section className="rounded-[34px] border border-white bg-white/75 p-6 shadow-[0_25px_80px_rgba(48,48,47,0.10)] backdrop-blur-2xl">
-      <div className="mb-5">
-        <h2 className="text-2xl font-black tracking-[-0.04em] text-[#30302F]">
-          Liste des livraisons
-        </h2>
-        <p className="mt-1 text-sm font-semibold text-[#6F7D80]">
-          Détail des caisses, patients, piluliers et statuts.
-        </p>
-      </div>
-
-      <div className="overflow-hidden rounded-[24px] border border-[#DDEAEC]">
-        <div className="hidden grid-cols-[1.2fr_1fr_0.8fr_0.8fr_0.9fr_0.8fr] bg-[#F5FAFA] px-5 py-4 text-sm font-black text-[#6F7D80] lg:grid">
-          <span>Établissement</span>
-          <span>Caisse</span>
-          <span>Patients</span>
-          <span>Piluliers</span>
-          <span>Statut</span>
-          <span>Date</span>
+    <section className="surface table-panel">
+      <div className="table-heading">
+        <div>
+          <div className="table-heading-title">
+            <h2>{title}</h2>
+            <span className="count-label">{livraisons.length}</span>
+          </div>
+          <p>Caisses, patients et documents de livraison.</p>
         </div>
-
-        <div className="divide-y divide-[#DDEAEC]">
-          {deliveries.map((item) => (
-            <div
-              key={item.id}
-              className="grid gap-3 bg-white px-5 py-4 text-sm font-semibold text-[#30302F] transition hover:bg-[#F8FBFB] lg:grid-cols-[1.2fr_1fr_0.8fr_0.8fr_0.9fr_0.8fr]"
-            >
-              <span>{item.establishmentName}</span>
-              <span>{item.caisse}</span>
-              <span>{item.patients}</span>
-              <span>{item.piluliers}</span>
+        {action}
+      </div>
+      {children}
+      {livraisons.length ? (
+        <>
+          <div
+            className="table-scroll"
+            tabIndex={0}
+            role="region"
+            aria-label="Tableau des livraisons, défilement horizontal disponible"
+          >
+            <table className="deliveries-table">
+              <caption className="sr-only">
+                {title} — {livraisons.length} livraison(s)
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Résidence</th>
+                  <th scope="col">Caisses</th>
+                  <th scope="col" className="table-numeric">
+                    Patients
+                  </th>
+                  <th scope="col" className="table-numeric">
+                    Piluliers
+                  </th>
+                  <th scope="col">Statut</th>
+                  <th scope="col">Signature</th>
+                  {onGeneratePdf && <th scope="col">Document</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {visible.map((item) => (
+                  <tr key={`${item.id}-${item.numcaisse}`}>
+                    <td>
+                      <div className="table-residence">
+                        <span className="icon-tile">
+                          <Icon name="building" size={14} />
+                        </span>
+                        <strong>{item.etablissementNom || "—"}</strong>
+                      </div>
+                    </td>
+                    <td>
+                      <CaisseBadges value={item.numcaisse} />
+                    </td>
+                    <td className="table-numeric">
+                      {Number(item.patients || 0).toLocaleString("fr-FR")}
+                    </td>
+                    <td className="table-numeric">
+                      {Number(item.piluliers || 0).toLocaleString("fr-FR")}
+                    </td>
+                    <td>
+                      <span
+                        className={`badge ${item.statut === "Livrée" ? "badge-success" : "badge-pending"}`}
+                      >
+                        <span className="status-dot" />
+                        {item.statut || "En attente"}
+                      </span>
+                    </td>
+                    <td className="table-date">
+                      {formatDeliveryDate(item.dateAction)}
+                    </td>
+                    {onGeneratePdf && (
+                      <td>
+                        <button
+                          type="button"
+                          className="pdf-button"
+                          onClick={(event) =>
+                            onGeneratePdf(item.id, event.currentTarget)
+                          }
+                          disabled={loadingPdfId === item.id}
+                          aria-busy={loadingPdfId === item.id}
+                          aria-label={`Voir le PDF de ${item.etablissementNom || "la résidence"}, signature du ${formatDeliveryDate(item.dateAction)}`}
+                        >
+                          {loadingPdfId === item.id ? (
+                            <span className="spinner" />
+                          ) : (
+                            <Icon name="eye" size={13} />
+                          )}
+                          <span>
+                            {loadingPdfId === item.id ? "Création…" : "PDF"}
+                          </span>
+                        </button>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="table-bottom">
+            <span aria-live="polite">
+              {offset + 1}–{Math.min(offset + pageSize, livraisons.length)} sur{" "}
+              {livraisons.length} livraison(s)
+            </span>
+            <div className="pagination">
+              <button
+                type="button"
+                className="icon-button"
+                aria-label="Page précédente"
+                disabled={page === 1}
+                onClick={() => setRequestedPage(page - 1)}
+              >
+                <Icon
+                  name="chevron"
+                  size={13}
+                  style={{ transform: "rotate(180deg)" }}
+                />
+              </button>
               <span>
-                <StatusBadge status={item.status} />
+                {page} / {totalPages}
               </span>
-              <span>{formatDate(item.date)}</span>
+              <button
+                type="button"
+                className="icon-button"
+                aria-label="Page suivante"
+                disabled={page === totalPages}
+                onClick={() => setRequestedPage(page + 1)}
+              >
+                <Icon name="chevron" size={13} />
+              </button>
             </div>
-          ))}
-        </div>
-      </div>
+          </div>
+        </>
+      ) : (
+        <EmptyState
+          title="Aucune livraison à afficher"
+          text={emptyText}
+          icon="truck"
+        />
+      )}
     </section>
   );
 }
-
-function StatusBadge({ status }) {
-  const styles = {
-    Livrée: "bg-green-500/10 text-green-700",
-    "En cours": "bg-[#7CBCCC]/20 text-[#30302F]",
-    "En attente": "bg-orange-500/10 text-orange-700",
-  };
-
+function CaisseBadges({ value }) {
+  const caisses = String(value || "—")
+    .split(",")
+    .map((caisse) => caisse.trim())
+    .filter(Boolean);
   return (
-    <span
-      className={[
-        "inline-flex rounded-full px-3 py-1 text-xs font-black",
-        styles[status] || "bg-gray-100 text-gray-700",
-      ].join(" ")}
-    >
-      {status}
-    </span>
+    <div className="caisse-badges">
+      {caisses.map((caisse, index) => (
+        <span key={`${caisse}-${index}`}>{caisse}</span>
+      ))}
+    </div>
   );
-}
-
-function formatDate(date) {
-  const d = new Date(date);
-
-  return d.toLocaleDateString("fr-FR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
 }

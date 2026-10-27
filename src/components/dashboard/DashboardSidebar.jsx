@@ -1,85 +1,116 @@
-import { NavLink } from "react-router-dom";
+import { useId } from "react";
+import { motion, useReducedMotion } from "framer-motion";
 import logoOreus from "../../assets/oreusblanc.svg";
+import Icon from "../ui/Icon";
 
-export default function DashboardSidebar({ user, logout }) {
-  return (
-    <aside className="hidden min-h-screen flex-col justify-between bg-[#30302F] p-7 text-white lg:flex">
-      <div>
-        <div className="rounded-[26px] bg-white px-5 py-4 shadow-2xl">
-          <img
-            src={logoOreus}
-            alt="OREUS"
-            className="block"
-            style={{ width: "155px", height: "auto" }}
-          />
-        </div>
-
-        <div className="mt-8 rounded-[26px] border border-white/10 bg-white/[0.06] p-5">
-          <span className="text-[12px] font-black uppercase tracking-[0.14em] text-[#7CBCCC]">
-            Connecté
-          </span>
-
-          <h2 className="mt-3 text-xl font-black leading-tight">
-            {user?.prenom} {user?.nom}
-          </h2>
-
-          <p className="mt-1 break-all text-sm text-white/55">{user?.email}</p>
-        </div>
-
-        <nav className="mt-8 grid gap-2">
-          <SidebarLink to="/dashboard" end label="Accueil" short="A" />
-          <SidebarLink to="/dashboard/livraisons" label="Livraisons" short="L" />
-          <SidebarLink
-            to="/dashboard/statistiques"
-            label="Statistiques"
-            short="S"
-          />
-          <SidebarLink
-            to="/dashboard/parametres"
-            label="Paramètres"
-            short="P"
-          />
-        </nav>
-      </div>
-
+const primary = [
+  { id: "ACCUEIL", label: "Vue d’ensemble", icon: "grid" },
+  { id: "LIVRAISONS", label: "Livraisons", icon: "truck" },
+  { id: "STATISTIQUES", label: "Statistiques", icon: "chart" },
+];
+const secondary = [
+  { id: "PROFIL", label: "Mon profil", icon: "user" },
+  { id: "PARAMETRES", label: "Paramètres", icon: "settings" },
+];
+export default function DashboardSidebar({
+  user,
+  logout,
+  activePage = "ACCUEIL",
+  setActivePage,
+}) {
+  const layoutId = useId();
+  const reduced = useReducedMotion();
+  const isPharmacien = user?.role === "PHARMACIEN";
+  const name = isPharmacien
+    ? user?.nompharm || user?.nom_pharmacie || user?.nom || "Ma pharmacie"
+    : user?.nom_residence || user?.nomresid || user?.nom || "Ma résidence";
+  const fullName =
+    `${user?.prenom || ""} ${user?.nom || ""}`.trim() || "Utilisateur";
+  const initials =
+    `${user?.prenom?.[0] || ""}${user?.nom?.[0] || ""}`.toUpperCase() || "U";
+  function renderItem(item) {
+    const active = activePage === item.id;
+    return (
       <button
-        onClick={logout}
-        className="rounded-2xl border border-red-400/20 bg-red-500/15 px-4 py-3 text-left font-black text-red-100 transition hover:bg-red-500/25"
+        className={`nav-item ${active ? "active" : ""}`}
+        key={item.id}
+        onClick={() => setActivePage?.(item.id)}
+        aria-current={active ? "page" : undefined}
       >
-        Se déconnecter
+        {active && (
+          <motion.span
+            className="nav-highlight"
+            layoutId={layoutId}
+            transition={
+              reduced
+                ? { duration: 0 }
+                : { type: "spring", stiffness: 450, damping: 38 }
+            }
+          />
+        )}
+        <Icon name={item.icon} size={18} />
+        <span>{item.label}</span>
       </button>
-    </aside>
-  );
-}
-
-function SidebarLink({ to, label, short, end = false }) {
+    );
+  }
   return (
-    <NavLink
-      to={to}
-      end={end}
-      className={({ isActive }) =>
-        [
-          "flex items-center gap-3 rounded-2xl px-4 py-3 text-left font-black transition duration-300",
-          isActive
-            ? "bg-white text-[#30302F]"
-            : "text-white/65 hover:bg-white/10 hover:text-white",
-        ].join(" ")
-      }
-    >
-      {({ isActive }) => (
-        <>
-          <span
-            className={[
-              "grid h-9 w-9 place-items-center rounded-xl text-sm font-black",
-              isActive ? "bg-[#7CBCCC]/20" : "bg-white/10",
-            ].join(" ")}
-          >
-            {short}
+    <aside className="sidebar">
+      <a
+        href="/dashboard"
+        className="sidebar-brand"
+        aria-label="OREUS — Tableau de bord"
+      >
+        <img src={logoOreus} alt="OREUS" />
+        <span>ESPACE PROFESSIONNEL</span>
+      </a>
+      <div className="workspace-card">
+        <span className="workspace-icon">
+          <Icon name={isPharmacien ? "pill" : "building"} size={17} />
+        </span>
+        <div>
+          <strong title={name}>{name}</strong>
+          <small>
+            {isPharmacien ? "Espace pharmacie" : "Espace résidence"}
+          </small>
+        </div>
+        <Icon name="shield" size={13} />
+      </div>
+      <p className="sidebar-label">Espace de travail</p>
+      <nav className="sidebar-nav" aria-label="Navigation principale">
+        {primary.map(renderItem)}
+      </nav>
+      <div className="sidebar-divider" />
+      <p className="sidebar-label">Votre compte</p>
+      <nav className="sidebar-nav" aria-label="Compte et préférences">
+        {secondary.map(renderItem)}
+      </nav>
+      <div className="sidebar-bottom">
+        <div className="sidebar-note">
+          <Icon name="activity" size={20} />
+          <strong>Au service du parcours de soin.</strong>
+          <p>
+            Vos établissements et vos livraisons, réunis dans un même espace.
+          </p>
+        </div>
+        <div className="sidebar-user">
+          <span className="avatar" aria-hidden="true">
+            {initials}
           </span>
-
-          <span>{label}</span>
-        </>
-      )}
-    </NavLink>
+          <div>
+            <strong title={fullName}>{fullName}</strong>
+            <small>{isPharmacien ? "Pharmacien" : "Résidence"}</small>
+          </div>
+          <button
+            type="button"
+            onClick={logout}
+            className="icon-button"
+            aria-label="Se déconnecter"
+            title="Se déconnecter"
+          >
+            <Icon name="logout" size={17} />
+          </button>
+        </div>
+      </div>
+    </aside>
   );
 }

@@ -1,21 +1,27 @@
 import { useEffect, useMemo, useState } from "react";
+import { motion, useReducedMotion } from "framer-motion";
 import {
   Bar,
   BarChart,
   CartesianGrid,
-  Cell,
-  Line,
-  LineChart,
-  Pie,
-  PieChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
-
 import { getHistoriqueDashboard } from "../../api/historiqueApi";
 import { getDashboardSession } from "../../storage/dashboardStorage";
+import {
+  ActivityChart,
+  DeliveryStatus,
+} from "../../components/dashboard/DashboardCharts";
+import DashboardSkeleton from "../../components/dashboard/DashboardSkeleton";
+import EmptyState from "../../components/dashboard/EmptyState";
+import MetricCard from "../../components/dashboard/MetricCard";
+import ChartTooltip from "../../components/dashboard/ChartTooltip";
+import AlertMessage from "../../components/AlertMessage";
+import Icon from "../../components/ui/Icon";
+import { Stagger, Reveal } from "../../components/ui/Motion";
 
 const MONTHS_FR = [
   "Jan",
@@ -33,28 +39,25 @@ const MONTHS_FR = [
 ];
 
 export default function StatistiquesPage() {
- const [deliveries, setDeliveries] = useState([]);
-const [loading, setLoading] = useState(true);
-const [userRole, setUserRole] = useState(null);
-
+  const [deliveries, setDeliveries] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [userRole] = useState(() => getDashboardSession()?.user?.role || null);
+  const [error, setError] = useState("");
+  const [retry, setRetry] = useState(0);
+  const reduced = useReducedMotion();
   useEffect(() => {
+    let active = true;
     async function load() {
-  const session = getDashboardSession();
-
-  setUserRole(session?.user?.role || null);
-
-  if (!session?.token || !session?.user) {
-    setDeliveries([]);
-    setLoading(false);
-    return;
-  }
-
-  try {
-    const data = await getHistoriqueDashboard(
-      session.token,
-      session.user.role
-    );
-
+      const session = getDashboardSession();
+      if (!session?.token || !session?.user) {
+        if (active) setLoading(false);
+        return;
+      }
+      try {
+        const data = await getHistoriqueDashboard(
+          session.token,
+          session.user.role,
+        );
         const mapped = Array.isArray(data)
           ? data.map((item) => {
               const patients = Array.isArray(item.patients)
@@ -63,7 +66,7 @@ const [userRole, setUserRole] = useState(null);
 
               const piluliersFromPatients = patients.reduce(
                 (sum, patient) => sum + Number(patient.nbpilulier || 0),
-                0
+                0,
               );
 
               return {
@@ -83,41 +86,45 @@ const [userRole, setUserRole] = useState(null);
                   item.date_debut_livraison ||
                   item.date_fin_livraison ||
                   null,
-                patients: Number(
-                  item.nombre_patients || patients.length || 0
-                ),
+                patients: Number(item.nombre_patients || patients.length || 0),
                 piluliers: Number(
-                  item.nombre_piluliers || piluliersFromPatients || 0
+                  item.nombre_piluliers || piluliersFromPatients || 0,
                 ),
               };
             })
           : [];
 
-        setDeliveries(mapped);
-      } catch (error) {
-        console.error("Erreur chargement statistiques :", error);
-        setDeliveries([]);
+        if (active) setDeliveries(mapped);
+      } catch (err) {
+        console.error("Erreur chargement statistiques :", err);
+        if (active) {
+          setError(err.message || "Impossible de charger les statistiques.");
+          setDeliveries([]);
+        }
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     }
-
     load();
-  }, []);
-   const isPharmacien = userRole === "PHARMACIEN";
-
+    return () => {
+      active = false;
+    };
+  }, [retry]);
+  const isPharmacien = userRole === "PHARMACIEN";
   const stats = useMemo(() => {
     const total = deliveries.length;
-    const livrees = deliveries.filter((item) => item.statut === "Livrée").length;
+    const livrees = deliveries.filter(
+      (item) => item.statut === "Livrée",
+    ).length;
     const enAttente = total - livrees;
     const patients = deliveries.reduce(
       (sum, item) => sum + Number(item.patients || 0),
-      0
+      0,
     );
 
     const piluliers = deliveries.reduce(
       (sum, item) => sum + Number(item.piluliers || 0),
-      0
+      0,
     );
 
     const tauxLivraison = total ? Math.round((livrees / total) * 100) : 0;
@@ -157,7 +164,7 @@ const [userRole, setUserRole] = useState(null);
     }, {});
 
     const monthlyData = Object.values(monthlyMap).sort((a, b) =>
-      a.key.localeCompare(b.key)
+      a.key.localeCompare(b.key),
     );
 
     const residencesMap = deliveries.reduce((acc, item) => {
@@ -191,7 +198,7 @@ const [userRole, setUserRole] = useState(null);
     const bestMonth =
       monthlyData.length > 0
         ? monthlyData.reduce((best, current) =>
-            current.livraisons > best.livraisons ? current : best
+            current.livraisons > best.livraisons ? current : best,
           )
         : null;
 
@@ -209,250 +216,235 @@ const [userRole, setUserRole] = useState(null);
     };
   }, [deliveries]);
 
-  if (loading) {
+  if (loading) return <DashboardSkeleton />;
+  if (error)
     return (
-      <div className="rounded-[28px] border border-white bg-white p-6 shadow-[0_18px_45px_rgba(48,48,47,0.06)]">
-        <p className="text-sm font-black text-[#6F7D80]">
-          Chargement des statistiques...
-        </p>
+      <div className="stack">
+        <AlertMessage result={{ type: "error", message: error }} />
+        <div>
+          <button
+            type="button"
+            className="button button-secondary"
+            onClick={() => {
+              setError("");
+              setLoading(true);
+              setRetry((value) => value + 1);
+            }}
+          >
+            <Icon name="refresh" size={15} />
+            Réessayer
+          </button>
+        </div>
       </div>
     );
-  }
-
+  const cards = [
+    {
+      label: "Livraisons totales",
+      value: stats.total,
+      icon: "truck",
+      detail: "Sur l’ensemble de l’historique",
+    },
+    {
+      label: "Livraisons livrées",
+      value: stats.livrees,
+      icon: "checkCircle",
+      detail: `${stats.tauxLivraison} % de l’historique`,
+    },
+    {
+      label: "Patients",
+      value: stats.patients,
+      icon: "users",
+      detail: "Cumul sur les livraisons",
+    },
+    {
+      label: "Piluliers",
+      value: stats.piluliers,
+      icon: "pill",
+      detail: "Cumul sur les livraisons",
+    },
+  ];
   return (
-    <div className="space-y-6">
-      <header className="rounded-[28px] border border-[#DDEAEC] bg-white p-6 shadow-[0_18px_45px_rgba(48,48,47,0.06)]">
-        <span className="rounded-full bg-[#7CBCCC]/15 px-4 py-2 text-xs font-black uppercase tracking-[0.16em] text-[#4A9CAF]">
-          Analyse
-        </span>
-
-        <h1 className="mt-4 text-3xl font-black tracking-[-0.04em] text-[#30302F]">
-          Statistiques des livraisons
-        </h1>
-
-        <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-[#6F7D80]">
-          Suivi de l’évolution des livraisons dans le temps, répartition par
-          statut et analyse des résidences les plus actives.
-        </p>
-      </header>
-
-      <section className="mx-auto grid max-w-5xl justify-center gap-4 md:grid-cols-2 xl:grid-cols-4">
-  <StatCard label="Livraisons totales" value={stats.total} />
-  <StatCard label="Livrées" value={stats.livrees} />
-  <StatCard label="Patients" value={stats.patients} />
-  <StatCard label="Piluliers" value={stats.piluliers} />
-</section>
-
-      <section className="grid gap-6 xl:grid-cols-[1.4fr_0.6fr]">
-        <article className="rounded-[30px] border border-[#DDEAEC] bg-white p-6 shadow-[0_18px_45px_rgba(48,48,47,0.06)]">
-          <div className="mb-5 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-            <div>
-              <h2 className="text-2xl font-black text-[#30302F]">
-                Évolution des livraisons par mois
-              </h2>
-
-              <p className="mt-1 text-sm font-semibold text-[#6F7D80]">
-                Cette courbe montre l’évolution réelle du nombre de livraisons
-                enregistrées dans le temps.
-              </p>
-            </div>
-
-            {stats.bestMonth ? (
-              <span className="w-fit rounded-full bg-[#7CBCCC]/15 px-4 py-2 text-xs font-black text-[#4A9CAF]">
-                Meilleur mois : {stats.bestMonth.label}
-              </span>
-            ) : null}
-          </div>
-
-          {stats.monthlyData.length === 0 ? (
-            <EmptyState message="Aucune donnée mensuelle disponible." />
-          ) : (
-            <div className="h-[340px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={stats.monthlyData}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis
-                    dataKey="label"
-                    tick={{ fontSize: 12, fill: "#6F7D80" }}
-                  />
-                  <YAxis tick={{ fontSize: 12, fill: "#6F7D80" }} />
-                  <Tooltip />
-                  <Line
-                    type="monotone"
-                    dataKey="livraisons"
-                    name="Livraisons"
-                    stroke="#4A9CAF"
-                    strokeWidth={4}
-                    dot={{ r: 5 }}
-                    activeDot={{ r: 7 }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-        </article>
-
-        
-      </section>
-
-     <section
-  className={[
-    "grid gap-6",
-    isPharmacien ? "xl:grid-cols-[1fr_1fr]" : "xl:grid-cols-1",
-  ].join(" ")}
->
-  <article className="rounded-[30px] border border-[#DDEAEC] bg-white p-6 shadow-[0_18px_45px_rgba(48,48,47,0.06)]">
-    <h2 className="text-2xl font-black text-[#30302F]">
-      Livrées par mois
-    </h2>
-
-    <p className="mt-1 text-sm font-semibold text-[#6F7D80]">
-      Comparaison mensuelle entre les livraisons terminées et celles en
-      attente ou en cours.
-    </p>
-
-    {stats.monthlyData.length === 0 ? (
-      <EmptyState message="Aucune donnée disponible pour ce graphique." />
-    ) : (
-      <div className="mt-5 h-[300px]">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={stats.monthlyData}>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} />
-            <XAxis
-              dataKey="label"
-              tick={{ fontSize: 12, fill: "#6F7D80" }}
-            />
-            <YAxis tick={{ fontSize: 12, fill: "#6F7D80" }} />
-            <Tooltip />
-            <Bar
-              dataKey="livrees"
-              name="Livrées"
-              fill="#7CBCCC"
-              radius={[10, 10, 0, 0]}
-            />
-            <Bar
-              dataKey="enAttente"
-              name="En attente"
-              fill="#30302F"
-              radius={[10, 10, 0, 0]}
-            />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-    )}
-  </article>
-
-  {isPharmacien && (
-    <article className="rounded-[30px] border border-[#DDEAEC] bg-white p-6 shadow-[0_18px_45px_rgba(48,48,47,0.06)]">
-      <h2 className="text-2xl font-black text-[#30302F]">
-        Résidences les plus actives
-      </h2>
-
-      <p className="mt-1 text-sm font-semibold text-[#6F7D80]">
-        Classement des résidences selon le nombre de livraisons.
-      </p>
-
-      {stats.topResidences.length === 0 ? (
-        <EmptyState message="Aucune résidence trouvée." />
-      ) : (
-        <div className="mt-5 space-y-3">
-          {stats.topResidences.map((item, index) => (
-            <ResidenceRank
-              key={item.name}
-              index={index}
-              name={item.name}
-              livraisons={item.livraisons}
-              patients={item.patients}
-              piluliers={item.piluliers}
-              max={stats.topResidences[0]?.livraisons || 1}
-            />
-          ))}
-        </div>
-      )}
-    </article>
-  )}
-</section>
-    </div>
-  );
-}
-
-function StatCard({ label, value }) {
-  return (
-    <article className="rounded-[24px] border border-[#DDEAEC] bg-white p-5 shadow-[0_14px_35px_rgba(48,48,47,0.05)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_18px_45px_rgba(48,48,47,0.08)]">
-      <p className="text-xs font-black uppercase tracking-[0.16em] text-[#7CBCCC]">
-        {label}
-      </p>
-
-      <strong className="mt-3 block text-3xl font-black text-[#30302F]">
-        {value}
-      </strong>
-    </article>
-  );
-}
-
-function ResidenceRank({ index, name, livraisons, patients, piluliers, max }) {
-  const percent = Math.round((livraisons / Math.max(1, max)) * 100);
-
-  return (
-    <div className="rounded-[22px] border border-[#DDEAEC] bg-[#F9FCFD] p-4">
-      <div className="flex items-center justify-between gap-3">
+    <div className="stack">
+      <div className="page-heading">
         <div>
-          <p className="text-sm font-black text-[#30302F]">
-            #{index + 1} {name}
-          </p>
-
-          <p className="mt-1 text-xs font-semibold text-[#6F7D80]">
-            {livraisons} livraison(s) • {patients} patient(s) • {piluliers} pilulier(s)
+          <span className="eyebrow">Comprendre votre activité</span>
+          <h1>Vos statistiques</h1>
+          <p>
+            Suivez l’évolution de vos livraisons et les indicateurs de votre
+            activité.
           </p>
         </div>
-
-        <span className="rounded-full bg-[#7CBCCC]/15 px-3 py-1 text-xs font-black text-[#4A9CAF]">
-          {livraisons}
+        <span className="period-chip">
+          <Icon name="calendar" size={14} />
+          Tout l’historique
         </span>
       </div>
-
-      <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#DDEAEC]">
-        <div
-          className="h-full rounded-full bg-[#7CBCCC] transition-all duration-700"
-          style={{ width: `${percent}%` }}
-        />
+      <Stagger className="kpi-grid">
+        {cards.map((card) => (
+          <Reveal key={card.label}>
+            <MetricCard {...card} />
+          </Reveal>
+        ))}
+      </Stagger>
+      <div className="charts-grid">
+        <ActivityChart monthly={stats.monthlyData} large />
+        <DeliveryStatus delivered={stats.livrees} total={stats.total} />
+      </div>
+      <div className={isPharmacien ? "detail-grid" : ""}>
+        <section className="surface chart-panel">
+          <div className="panel-heading">
+            <div>
+              <h2>Livraisons par mois</h2>
+              <p>Comparaison des livraisons livrées et en attente</p>
+            </div>
+          </div>
+          <div className="chart-legend" style={{ marginTop: 18 }}>
+            <span>
+              <i />
+              Livrées
+            </span>
+            <span>
+              <i className="alt" />
+              En attente / en cours
+            </span>
+          </div>
+          {stats.monthlyData.length ? (
+            <>
+              <div className="chart-frame chart-frame-large">
+                <ResponsiveContainer
+                  width="100%"
+                  height="100%"
+                  minWidth={0}
+                  initialDimension={{ width: 1, height: 270 }}
+                >
+                  <BarChart
+                    data={stats.monthlyData}
+                    barGap={4}
+                    margin={{ top: 8, right: 0, bottom: 0, left: -25 }}
+                    accessibilityLayer
+                  >
+                    <CartesianGrid
+                      stroke="#edf2f5"
+                      strokeDasharray="3 4"
+                      vertical={false}
+                    />
+                    <XAxis
+                      dataKey="label"
+                      tick={{ fontSize: 10, fill: "#607682" }}
+                      axisLine={false}
+                      tickLine={false}
+                      minTickGap={20}
+                    />
+                    <YAxis
+                      allowDecimals={false}
+                      tick={{ fontSize: 10, fill: "#607682" }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <Tooltip content={<ChartTooltip />} />
+                    <Bar
+                      dataKey="livrees"
+                      name="Livrées"
+                      fill="#4A9CAF"
+                      radius={[4, 4, 0, 0]}
+                      maxBarSize={24}
+                      isAnimationActive={!reduced}
+                      animationDuration={650}
+                    />
+                    <Bar
+                      dataKey="enAttente"
+                      name="En attente / en cours"
+                      fill="#cedfe5"
+                      radius={[4, 4, 0, 0]}
+                      maxBarSize={24}
+                      isAnimationActive={!reduced}
+                      animationDuration={650}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <p className="sr-only">
+                {stats.monthlyData
+                  .map(
+                    (m) =>
+                      `${m.label} : ${m.livrees} livrées, ${m.enAttente} en attente ou en cours`,
+                  )
+                  .join(". ")}
+              </p>
+            </>
+          ) : (
+            <EmptyState
+              icon="chart"
+              title="Pas encore de données mensuelles"
+              text="Les livraisons avec une date renseignée alimenteront ce graphique."
+            />
+          )}
+          {stats.bestMonth && (
+            <p className="info-note" style={{ marginTop: 15 }}>
+              <Icon name="chart" size={14} />
+              Mois le plus actif : {stats.bestMonth.label} ·{" "}
+              {stats.bestMonth.livraisons} livraison(s)
+            </p>
+          )}
+        </section>
+        {isPharmacien && (
+          <section className="surface detail-panel">
+            <div className="panel-heading">
+              <div>
+                <h2>Résidences les plus actives</h2>
+                <p>Les 6 premières selon le nombre de livraisons</p>
+              </div>
+              <span className="icon-tile">
+                <Icon name="building" size={18} />
+              </span>
+            </div>
+            {stats.topResidences.length ? (
+              <div className="rank-list">
+                {stats.topResidences.map((item, index) => (
+                  <div key={item.name}>
+                    <div className="rank-top">
+                      <span className="rank-index">
+                        {String(index + 1).padStart(2, "0")}
+                      </span>
+                      <div>
+                        <strong>{item.name}</strong>
+                        <small>
+                          {item.patients} patients cumulés · {item.piluliers}{" "}
+                          piluliers
+                        </small>
+                      </div>
+                      <span className="count-label">{item.livraisons}</span>
+                    </div>
+                    <div className="rank-track">
+                      <motion.span
+                        initial={{ width: 0 }}
+                        animate={{
+                          width: `${(item.livraisons / Math.max(1, stats.topResidences[0].livraisons)) * 100}%`,
+                        }}
+                        transition={{
+                          duration: reduced ? 0 : 0.7,
+                          delay: reduced ? 0 : index * 0.06,
+                        }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <EmptyState
+                icon="building"
+                title="Aucune résidence à classer"
+                text="Le classement apparaîtra après vos premières livraisons."
+              />
+            )}
+          </section>
+        )}
       </div>
     </div>
   );
 }
-
-function LegendItem({ color, label, value }) {
-  return (
-    <div className="flex items-center justify-between rounded-2xl bg-[#F9FCFD] px-4 py-3">
-      <div className="flex items-center gap-2">
-        <span
-          className="h-3 w-3 rounded-full"
-          style={{ backgroundColor: color }}
-        />
-        <span className="text-sm font-black text-[#30302F]">{label}</span>
-      </div>
-
-      <span className="text-sm font-black text-[#6F7D80]">{value}</span>
-    </div>
-  );
-}
-
-function EmptyState({ message }) {
-  return (
-    <div className="mt-5 rounded-[24px] border border-dashed border-[#7CBCCC]/40 bg-[#7CBCCC]/10 p-8 text-center">
-      <p className="text-sm font-black text-[#30302F]">{message}</p>
-    </div>
-  );
-}
-
 function parseDate(value) {
   if (!value) return null;
-
   const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return null;
-  }
-
-  return date;
+  return Number.isNaN(date.getTime()) ? null : date;
 }

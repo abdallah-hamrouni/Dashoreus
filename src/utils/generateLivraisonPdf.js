@@ -740,7 +740,11 @@ function addSignature(doc, livraison, signatureImage, y) {
   return y + boxHeight + 8;
 }
 
-export async function generateLivraisonPdf(livraison, profile = {}) {
+export async function generateLivraisonPdf(
+  livraison,
+  profile = {},
+  { download = true } = {},
+) {
   const doc = new jsPDF("p", "mm", "a4");
 
   registerOreusFont(doc);
@@ -773,6 +777,10 @@ export async function generateLivraisonPdf(livraison, profile = {}) {
     .replaceAll("/", "-")
     .replaceAll(",", "_")
     .replaceAll("\\", "-");
+
+  if (!download) {
+    return { blob: doc.output("blob"), fileName };
+  }
 
   doc.save(fileName);
 }

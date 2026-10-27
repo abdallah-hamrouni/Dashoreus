@@ -1,43 +1,19 @@
-import { useEffect, useState } from "react";
-
+import { useState } from "react";
 import {
   getDashboardProfile,
   saveDashboardProfile,
 } from "../../storage/dashboardStorage";
+import InputField from "../../components/InputField";
+import PrimaryButton from "../../components/PrimaryButton";
+import AlertMessage from "../../components/AlertMessage";
+import Modal from "../../components/ui/Modal";
+import Icon from "../../components/ui/Icon";
 
 export default function ParametresPage({ user, logout }) {
-  const [form, setForm] = useState({
-    address: "",
-    postalCode: "",
-    city: "",
-  });
-
-  const [profile, setProfile] = useState({
-    address: "",
-    postalCode: "",
-    city: "",
-  });
-
+  const [form, setForm] = useState({ address: "", postalCode: "", city: "" });
+  const [profile, setProfile] = useState(getDashboardProfile);
   const [savedMessage, setSavedMessage] = useState("");
-
-  useEffect(() => {
-    const savedProfile = getDashboardProfile();
-
-    const currentProfile = {
-      address: savedProfile.address || "",
-      postalCode: savedProfile.postalCode || "",
-      city: savedProfile.city || savedProfile.ville || "",
-    };
-
-    setProfile(currentProfile);
-
-    setForm({
-      address: "",
-      postalCode: "",
-      city: "",
-    });
-  }, []);
-
+  const [confirmReset, setConfirmReset] = useState(false);
   function handleChange(event) {
     const { name, value } = event.target;
 
@@ -92,11 +68,6 @@ export default function ParametresPage({ user, logout }) {
 
   const fullName = `${user?.prenom || ""} ${user?.nom || ""}`.trim() || "-";
 
-  /**
-   * Coordonnées résidence :
-   * Elles sont récupérées depuis le compte résidence.
-   * Le formulaire n'est pas affiché pour une résidence.
-   */
   const residenceAddress =
     user?.adresse ||
     user?.address ||
@@ -105,23 +76,10 @@ export default function ParametresPage({ user, logout }) {
     "";
 
   const residencePostalCode =
-    user?.code_postal ||
-    user?.codePostal ||
-    user?.postalCode ||
-    user?.cp ||
-    "";
+    user?.code_postal || user?.codePostal || user?.postalCode || user?.cp || "";
 
-  const residenceCity =
-    user?.ville ||
-    user?.city ||
-    user?.commune ||
-    "";
+  const residenceCity = user?.ville || user?.city || user?.commune || "";
 
-  /**
-   * Coordonnées à afficher :
-   * - Pharmacien : coordonnées saisies dans la page paramètres.
-   * - Résidence : coordonnées déjà existantes dans le compte.
-   */
   const displayAddress = isPharmacien ? profile.address : residenceAddress;
   const displayPostalCode = isPharmacien
     ? profile.postalCode
@@ -135,272 +93,226 @@ export default function ParametresPage({ user, logout }) {
     .filter(Boolean)
     .join(" — ");
 
+  const info = [
+    ["Nom complet", fullName],
+    ["Adresse email", user?.email || "—"],
+    ["Adresse", displayAddress || "Non renseignée"],
+    ["Code postal", displayPostalCode || "Non renseigné"],
+    ["Ville", displayCity || "Non renseignée"],
+  ];
   return (
-    <div className="space-y-4">
-      <header className="rounded-[22px] border border-[#DDEAEC] bg-white px-5 py-4 shadow-[0_12px_30px_rgba(48,48,47,0.05)]">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <span className="rounded-full bg-[#7CBCCC]/15 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.14em] text-[#4A9CAF]">
-              Paramètres
-            </span>
-
-            <h1 className="mt-3 text-2xl font-black tracking-[-0.03em] text-[#30302F]">
-              Paramètres du compte
-            </h1>
-
-            <p className="mt-1 max-w-2xl text-sm font-semibold leading-5 text-[#6F7D80]">
-              {isPharmacien
-                ? "Gérez les coordonnées utilisées dans les bons de livraison PDF."
-                : "Consultez les informations liées à votre compte résidence."}
-            </p>
-          </div>
-
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[16px] bg-[#30302F] text-base text-white shadow-sm">
-            ⚙️
-          </div>
+    <div className="stack">
+      <div className="page-heading">
+        <div>
+          <span className="eyebrow">Un espace à votre image</span>
+          <h1>Paramètres du compte</h1>
+          <p>
+            Consultez vos informations et personnalisez les coordonnées de vos
+            documents.
+          </p>
         </div>
-      </header>
-
-      <section className="grid gap-4 xl:grid-cols-[1fr_0.95fr]">
-        <article className="rounded-[22px] border border-[#DDEAEC] bg-white p-4 shadow-[0_12px_30px_rgba(48,48,47,0.05)]">
-          <div className="flex items-start justify-between gap-3">
+        <span className="icon-tile">
+          <Icon name="settings" size={19} />
+        </span>
+      </div>
+      <AlertMessage
+        result={
+          savedMessage ? { type: "success", message: savedMessage } : null
+        }
+        onDismiss={() => setSavedMessage("")}
+      />
+      <div className="detail-grid">
+        <section className="surface detail-panel">
+          <div className="panel-heading">
             <div>
-              <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#7CBCCC]">
-                Profil
-              </p>
-
-              <h2 className="mt-1 text-xl font-black text-[#30302F]">
-                Informations du compte
-              </h2>
+              <h2>Informations du compte</h2>
+              <p>Votre établissement et vos coordonnées</p>
             </div>
-
-            <span className="rounded-full bg-[#7CBCCC]/15 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.1em] text-[#4A9CAF]">
-              {user?.role || "-"}
+            <span className="badge">
+              {isPharmacien ? "Pharmacien" : "Résidence"}
             </span>
           </div>
-
-          <div className="mt-4 rounded-[18px] border border-[#DDEAEC] bg-[#F9FCFD] p-4">
-            <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#7CBCCC]">
-              Établissement
-            </p>
-
-            <h3 className="mt-1 text-lg font-black text-[#30302F]">
-              {structureName}
-            </h3>
-          </div>
-
-          <div className="mt-4 grid gap-3 md:grid-cols-2">
-            <InfoCard label="Nom complet" value={fullName} />
-            <InfoCard label="Email" value={user?.email || "-"} />
-
-            <InfoCard
-              label="Adresse"
-              value={displayAddress || "Adresse non renseignée"}
-            />
-
-            <InfoCard
-              label="Code postal"
-              value={displayPostalCode || "Code postal non renseigné"}
-            />
-
-            <InfoCard
-              label="Ville"
-              value={displayCity || "Ville non renseignée"}
-            />
-          </div>
-        </article>
-
-        {isPharmacien ? (
-          <article className="rounded-[22px] border border-[#DDEAEC] bg-white p-4 shadow-[0_12px_30px_rgba(48,48,47,0.05)]">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#7CBCCC]">
-                  PDF
-                </p>
-
-                <h2 className="mt-1 text-xl font-black text-[#30302F]">
-                  Coordonnées de livraison
-                </h2>
-              </div>
-
-              <div className="flex h-10 w-10 items-center justify-center rounded-[15px] bg-[#7CBCCC]/15 text-base">
-                📄
-              </div>
+          <div className="linked-pharmacy" style={{ marginTop: 22 }}>
+            <span className="icon-tile">
+              <Icon name={isPharmacien ? "pill" : "building"} size={18} />
+            </span>
+            <div>
+              <small>Votre établissement</small>
+              <strong>{structureName}</strong>
             </div>
-
-            <p className="mt-2 text-sm font-semibold leading-5 text-[#6F7D80]">
-              Ces informations seront affichées dans l’en-tête des bons de
-              livraison.
-            </p>
-
-            <form onSubmit={handleSave} className="mt-4 space-y-3">
-              <label className="block text-sm font-black text-[#30302F]">
-                Adresse
+          </div>
+          <dl className="info-grid">
+            {info.map(([label, value]) => (
+              <div className="info-item" key={label}>
+                <dt>{label}</dt>
+                <dd>{value}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+        {isPharmacien ? (
+          <section className="surface detail-panel">
+            <div className="panel-heading">
+              <div>
+                <h2>Coordonnées des bons de livraison</h2>
+                <p>Ces informations apparaissent dans l’en-tête de vos PDF.</p>
+              </div>
+              <span className="icon-tile">
+                <Icon name="file" size={18} />
+              </span>
+            </div>
+            <form onSubmit={handleSave} className="settings-form">
+              <div className="field">
+                <label htmlFor="profile-address">Adresse</label>
                 <textarea
+                  id="profile-address"
                   name="address"
-                  rows="2"
+                  rows={2}
                   value={form.address}
                   onChange={handleChange}
-                  className="mt-1.5 w-full resize-none rounded-[16px] border border-[#DDEAEC] bg-white px-3.5 py-2.5 text-sm font-bold text-[#30302F] outline-none transition focus:border-[#7CBCCC] focus:ring-4 focus:ring-[#7CBCCC]/15"
-                  placeholder={profile.address || "Ex : 12 rue de la Paix"}
+                  placeholder={profile.address || "12 rue de la Paix"}
+                  autoComplete="street-address"
                 />
-              </label>
-
-              <div className="grid gap-3 md:grid-cols-2">
-                <label className="block text-sm font-black text-[#30302F]">
-                  Code postal
-                  <input
-                    type="text"
-                    name="postalCode"
-                    value={form.postalCode}
-                    onChange={handleChange}
-                    className="mt-1.5 w-full rounded-[16px] border border-[#DDEAEC] bg-white px-3.5 py-2.5 text-sm font-bold text-[#30302F] outline-none transition focus:border-[#7CBCCC] focus:ring-4 focus:ring-[#7CBCCC]/15"
-                    placeholder={profile.postalCode || "Ex : 31000"}
-                  />
-                </label>
-
-                <label className="block text-sm font-black text-[#30302F]">
-                  Ville
-                  <input
-                    type="text"
-                    name="city"
-                    value={form.city}
-                    onChange={handleChange}
-                    className="mt-1.5 w-full rounded-[16px] border border-[#DDEAEC] bg-white px-3.5 py-2.5 text-sm font-bold text-[#30302F] outline-none transition focus:border-[#7CBCCC] focus:ring-4 focus:ring-[#7CBCCC]/15"
-                    placeholder={profile.city || "Ex : Toulouse"}
-                  />
-                </label>
               </div>
-
-              <button
-                type="submit"
-                className="flex w-full items-center justify-center gap-2 rounded-[16px] bg-[#30302F] px-4 py-3 text-sm font-black text-white shadow-[0_10px_24px_rgba(48,48,47,0.14)] transition hover:-translate-y-0.5 hover:bg-[#4A9CAF]"
+              <div className="twoCols">
+                <InputField
+                  label="Code postal"
+                  name="postalCode"
+                  value={form.postalCode}
+                  onChange={handleChange}
+                  placeholder={profile.postalCode || "31000"}
+                  autoComplete="postal-code"
+                />
+                <InputField
+                  label="Ville"
+                  name="city"
+                  value={form.city}
+                  onChange={handleChange}
+                  placeholder={profile.city || "Toulouse"}
+                  autoComplete="address-level2"
+                />
+              </div>
+              <p
+                className="small muted"
+                style={{ fontSize: 10, lineHeight: 1.8 }}
               >
+                Les champs laissés vides conservent les coordonnées
+                enregistrées.
+              </p>
+              <PrimaryButton icon="save">
                 Enregistrer les coordonnées
-                <span>→</span>
-              </button>
-
-              {savedMessage ? (
-                <div className="rounded-[16px] border border-green-500/20 bg-green-500/10 px-3.5 py-2.5 text-sm font-black text-green-700">
-                  {savedMessage}
-                </div>
-              ) : null}
+              </PrimaryButton>
             </form>
-
-            <div className="mt-4 rounded-[18px] border border-dashed border-[#7CBCCC]/50 bg-[#7CBCCC]/10 p-4">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#4A9CAF]">
-                  Aperçu PDF
-                </p>
-
-                <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-black text-[#4A9CAF] shadow-sm">
-                  En-tête
-                </span>
+            <div className="pdf-preview">
+              <div className="pdf-preview-heading">
+                <span>APERÇU DU DOCUMENT</span>
+                <Icon name="file" size={14} />
               </div>
-
-              <div className="mt-3 rounded-[16px] bg-white p-3 shadow-sm">
-                <p className="text-sm font-black text-[#30302F]">
-                  {structureName}
-                </p>
-
-                <p className="mt-1 text-xs font-semibold text-[#6F7D80]">
-                  {fullAddress || "Les coordonnées apparaîtront ici."}
+              <div className="pdf-preview-content">
+                <strong>{structureName}</strong>
+                <p>
+                  {fullAddress ||
+                    "Vos coordonnées enregistrées apparaîtront ici."}
                 </p>
               </div>
             </div>
-          </article>
+          </section>
         ) : (
-          <article className="rounded-[22px] border border-[#DDEAEC] bg-white p-4 shadow-[0_12px_30px_rgba(48,48,47,0.05)]">
-            <div className="flex items-start justify-between gap-3">
+          <section className="surface detail-panel">
+            <div className="panel-heading">
               <div>
-                <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#7CBCCC]">
-                  Résidence
+                <h2>Les coordonnées de votre résidence</h2>
+                <p>Informations associées à votre compte</p>
+              </div>
+              <span className="icon-tile">
+                <Icon name="pin" size={18} />
+              </span>
+            </div>
+            <div className="pdf-preview">
+              <div className="pdf-preview-content">
+                <strong>{structureName}</strong>
+                <p>
+                  {fullAddress ||
+                    "Coordonnées non renseignées dans le compte résidence."}
                 </p>
-
-                <h2 className="mt-1 text-xl font-black text-[#30302F]">
-                  Coordonnées déjà enregistrées
-                </h2>
-              </div>
-
-              <div className="flex h-10 w-10 items-center justify-center rounded-[15px] bg-[#7CBCCC]/15 text-base">
-                🏠
               </div>
             </div>
-
-            <p className="mt-2 text-sm font-semibold leading-5 text-[#6F7D80]">
-              Les informations de la résidence sont récupérées automatiquement
-              depuis le compte. Aucun formulaire de modification n’est nécessaire.
-            </p>
-
-            <div className="mt-4 rounded-[18px] border border-[#DDEAEC] bg-[#F9FCFD] p-4">
-              <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#7CBCCC]">
-                Coordonnées résidence
-              </p>
-
-              <p className="mt-2 text-sm font-black text-[#30302F]">
-                {structureName}
-              </p>
-
-              <p className="mt-1 text-sm font-semibold text-[#6F7D80]">
-                {fullAddress ||
-                  "Coordonnées non renseignées dans le compte résidence."}
+            <div className="info-note" style={{ marginTop: 22 }}>
+              <Icon name="info" size={15} />
+              <p>
+                Ces informations sont récupérées depuis votre compte résidence.
               </p>
             </div>
-          </article>
+          </section>
         )}
-      </section>
-
-      <section
-        className={[
-          "grid gap-4",
-          isPharmacien ? "lg:grid-cols-[1fr_0.8fr]" : "lg:grid-cols-[0.8fr]",
-        ].join(" ")}
-      >
-        {isPharmacien ? (
-          <article className="rounded-[22px] border border-[#DDEAEC] bg-white p-4 shadow-[0_12px_30px_rgba(48,48,47,0.05)]">
-            <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#7CBCCC]">
-              Coordonnées
+      </div>
+      {isPharmacien && (
+        <section className="surface danger-zone">
+          <div>
+            <h2>Réinitialiser les coordonnées</h2>
+            <p>
+              Supprimez l’adresse, le code postal et la ville enregistrés pour
+              vos prochains documents.
             </p>
-
-            <h2 className="mt-1 text-xl font-black text-[#30302F]">
-              Réinitialiser
-            </h2>
-
-            <p className="mt-1 text-sm font-semibold leading-5 text-[#6F7D80]">
-              Supprime l’adresse, le code postal et la ville enregistrés.
-            </p>
-
+          </div>
+          <button
+            type="button"
+            className="button button-danger"
+            onClick={() => setConfirmReset(true)}
+          >
+            <Icon name="trash" size={15} />
+            Supprimer les coordonnées
+          </button>
+        </section>
+      )}
+      {logout && (
+        <section className="surface danger-zone">
+          <div>
+            <h2>Votre session</h2>
+            <p>Vous êtes connecté en tant que {user?.email || fullName}.</p>
+          </div>
+          <button
+            type="button"
+            className="button button-secondary"
+            onClick={logout}
+          >
+            <Icon name="logout" size={15} />
+            Se déconnecter
+          </button>
+        </section>
+      )}
+      <Modal
+        open={confirmReset}
+        onClose={() => setConfirmReset(false)}
+        title="Supprimer les coordonnées ?"
+        icon="trash"
+        footer={
+          <>
             <button
               type="button"
-              onClick={resetCoordinates}
-              className="mt-4 rounded-[16px] border border-[#DDEAEC] bg-[#F9FCFD] px-4 py-2.5 text-sm font-black text-[#30302F] transition hover:border-red-400 hover:bg-red-500/10 hover:text-red-600"
+              className="button button-secondary"
+              onClick={() => setConfirmReset(false)}
+            >
+              Annuler
+            </button>
+            <button
+              type="button"
+              className="button button-danger"
+              onClick={() => {
+                resetCoordinates();
+                setConfirmReset(false);
+              }}
             >
               Supprimer les coordonnées
             </button>
-          </article>
-        ) : null}
-
-     
-      </section>
-    </div>
-  );
-}
-
-function InfoCard({ label, value, large = false }) {
-  return (
-    <div
-      className={[
-        "rounded-[16px] border border-[#DDEAEC] bg-[#F9FCFD] p-3 transition hover:-translate-y-0.5 hover:bg-white hover:shadow-[0_10px_24px_rgba(48,48,47,0.05)]",
-        large ? "md:col-span-2" : "",
-      ].join(" ")}
-    >
-      <span className="text-[10px] font-black uppercase tracking-[0.14em] text-[#7CBCCC]">
-        {label}
-      </span>
-
-      <p className="mt-1.5 break-words text-sm font-black leading-5 text-[#30302F]">
-        {value}
-      </p>
+          </>
+        }
+      >
+        <p>
+          L’adresse, le code postal et la ville seront retirés de vos prochains
+          bons de livraison. Vous pourrez les renseigner à nouveau.
+        </p>
+      </Modal>
     </div>
   );
 }

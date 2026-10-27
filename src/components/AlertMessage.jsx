@@ -1,20 +1,37 @@
-export default function AlertMessage({ result }) {
-  if (!result) return null;
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import Icon from "./ui/Icon";
 
-  const isSuccess = result.type === "success";
-
+export default function AlertMessage({ result, onDismiss }) {
+  const reduced = useReducedMotion();
   return (
-    <div
-      className={[
-        "mt-5 animate-[fadeUp_0.35s_ease-out] rounded-2xl border p-4 text-sm font-bold",
-        isSuccess
-          ? "border-green-500/20 bg-green-500/10 text-green-700"
-          : "border-red-500/20 bg-red-500/10 text-red-700",
-      ].join(" ")}
-    >
-      <strong>{result.message}</strong>
-
-     
-    </div>
+    <AnimatePresence initial={false}>
+      {result && (
+        <motion.div
+          key={`${result.type}-${result.message}`}
+          initial={{ opacity: 0, y: reduced ? 0 : -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: reduced ? 0 : 0.2 }}
+          className={`notice ${result.type === "success" ? "notice-success" : "notice-error"}`}
+          role={result.type === "success" ? "status" : "alert"}
+        >
+          <Icon
+            name={result.type === "success" ? "checkCircle" : "alert"}
+            size={20}
+          />
+          <p>{result.message}</p>
+          {onDismiss && (
+            <button
+              type="button"
+              className="icon-button"
+              onClick={onDismiss}
+              aria-label="Fermer le message"
+            >
+              <Icon name="close" size={16} />
+            </button>
+          )}
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }

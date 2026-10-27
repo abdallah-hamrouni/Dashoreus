@@ -1,71 +1,143 @@
-﻿export default function DashboardHeader({
+import { useEffect, useId, useRef, useState } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import Icon from "../ui/Icon";
+
+const labels = {
+  ACCUEIL: "Vue d’ensemble",
+  LIVRAISONS: "Livraisons",
+  STATISTIQUES: "Statistiques",
+  PROFIL: "Mon profil",
+  PARAMETRES: "Paramètres",
+};
+export default function DashboardHeader({
   user,
-  isPharmacien,
-  establishmentsCount,
+  activePage = "ACCUEIL",
+  setActivePage,
+  logout,
+  onOpenMenu,
 }) {
-  const entityName = isPharmacien
-    ? user.nompharm || user.nom_pharmacie || user.nom || "Ma pharmacie"
-    : user.nom_residence || user.nomresid || user.nom || "Ma résidence";
-
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  const trigger = useRef(null);
+  const menuId = useId();
+  const reduced = useReducedMotion();
+  const fullName =
+    `${user?.prenom || ""} ${user?.nom || ""}`.trim() || "Mon compte";
+  const initials =
+    `${user?.prenom?.[0] || ""}${user?.nom?.[0] || ""}`.toUpperCase() || "U";
+  useEffect(() => {
+    if (!open) return;
+    function outside(event) {
+      if (!ref.current?.contains(event.target)) setOpen(false);
+    }
+    function escape(event) {
+      if (event.key === "Escape") {
+        setOpen(false);
+        trigger.current?.focus();
+      }
+    }
+    document.addEventListener("pointerdown", outside);
+    document.addEventListener("keydown", escape);
+    return () => {
+      document.removeEventListener("pointerdown", outside);
+      document.removeEventListener("keydown", escape);
+    };
+  }, [open]);
+  function goTo(page) {
+    setOpen(false);
+    setActivePage?.(page);
+  }
   return (
-    <header className="dashboardHero mb-8 overflow-hidden rounded-[34px] border border-white/80 bg-gradient-to-br from-white via-[#eef9fb] to-[#f8fbff] p-6 shadow-[0_30px_90px_rgba(48,48,47,0.14)] backdrop-blur-2xl sm:p-8">
-      <div className="dashboardHeroGlow" aria-hidden="true" />
-      <div className="dashboardHeroGlowAlt" aria-hidden="true" />
-      <div className="dashboardHeroGrid">
-        <div className="dashboardHeroContent">
-          <div className="dashboardHeroTop">
-            <div>
-              
-
-
-              <p className="dashboardHeroCopy">
-                Bonjour {user.prenom}, vous êtes connecté en tant que <strong>{isPharmacien ? "Pharmacien" : "Résidence"}</strong>.
-              </p>
-            </div>
-
-            <div className="dashboardHeroUserCard">
-              <span className="dashboardHeroUserLabel">Compte actif</span>
-              <strong>{user.email}</strong>
-              <span>{establishmentsCount} liaison(s)</span>
-            </div>
-          </div>
-
-          <div className="dashboardHeroQuick">
-            <div className="dashboardHeroChip">
-              <span>Type</span>
-              <strong>{isPharmacien ? "Pharmacie" : "Résidence"}</strong>
-            </div>
-            <div className="dashboardHeroChip">
-              <span>Liaisons actives</span>
-              <strong>{establishmentsCount}</strong>
-            </div>
-          </div>
+    <header className="topbar">
+      <div className="topbar-start">
+        <button
+          type="button"
+          className="icon-button mobile-menu-button"
+          aria-label="Ouvrir la navigation"
+          onClick={onOpenMenu}
+        >
+          <Icon name="menu" />
+        </button>
+        <div className="breadcrumb">
+          <span>Espace professionnel</span>
+          <Icon name="chevron" size={12} />
+          <strong>{labels[activePage]}</strong>
         </div>
-
-        <div className="dashboardHeroCard">
-          <div className="dashboardHeroCardHeader">
-            <span>Vue globale</span>
-            <strong>{establishmentsCount} liaison(s)</strong>
-          </div>
-
-          <div className="dashboardHeroChart" aria-hidden="true">
-            <div className="dashboardHeroChartGrid">
-              <span className="dashboardHeroChartBar" style={{ "--h": "32%" }} />
-              <span className="dashboardHeroChartBar" style={{ "--h": "64%" }} />
-              <span className="dashboardHeroChartBar" style={{ "--h": "48%" }} />
-              <span className="dashboardHeroChartBar" style={{ "--h": "72%" }} />
-              <span className="dashboardHeroChartBar" style={{ "--h": "58%" }} />
-              <span className="dashboardHeroChartBar" style={{ "--h": "84%" }} />
-            </div>
-            <div className="dashboardHeroChartLine" />
-            <div className="dashboardHeroChartDot" style={{ left: "14%" }} />
-            <div className="dashboardHeroChartDot" style={{ left: "42%" }} />
-            <div className="dashboardHeroChartDot" style={{ left: "68%" }} />
-          </div>
-
-          <p className="dashboardHeroCardNote">
-            Données illustratives inspirées du style OREUS, avec un rendu moderne et animé.
-          </p>
+      </div>
+      <div className="topbar-actions">
+        <span className="topbar-date">
+          <Icon name="calendar" size={14} />
+          {new Date().toLocaleDateString("fr-FR", {
+            day: "numeric",
+            month: "long",
+            year: "numeric",
+            timeZone: "Europe/Paris",
+          })}
+        </span>
+        <div
+          ref={ref}
+          className="account-menu-wrap"
+          onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget))
+              setOpen(false);
+          }}
+        >
+          <button
+            type="button"
+            ref={trigger}
+            className="account-trigger"
+            aria-label={`Menu du compte de ${fullName}`}
+            aria-expanded={open}
+            aria-controls={menuId}
+            onClick={() => setOpen(!open)}
+          >
+            <span className="avatar" aria-hidden="true">
+              {initials}
+            </span>
+            <span className="account-trigger-text">
+              <strong>{fullName}</strong>
+              <small>
+                {user?.role === "PHARMACIEN" ? "Pharmacien" : "Résidence"}
+              </small>
+            </span>
+            <Icon name="down" size={13} />
+          </button>
+          <AnimatePresence>
+            {open && (
+              <motion.div
+                id={menuId}
+                className="account-menu"
+                initial={{ opacity: 0, y: reduced ? 0 : -6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: reduced ? 0 : 0.15 }}
+              >
+                <div className="account-menu-info">
+                  <strong>{fullName}</strong>
+                  {user?.email}
+                </div>
+                <button type="button" onClick={() => goTo("PROFIL")}>
+                  <Icon name="user" size={16} />
+                  Mon profil
+                </button>
+                <button type="button" onClick={() => goTo("PARAMETRES")}>
+                  <Icon name="settings" size={16} />
+                  Paramètres
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpen(false);
+                    logout();
+                  }}
+                  className="menu-logout"
+                >
+                  <Icon name="logout" size={16} />
+                  Se déconnecter
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
     </header>

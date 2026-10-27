@@ -1,6 +1,8 @@
+import { useId, useMemo } from "react";
+import { useReducedMotion } from "framer-motion";
 import {
-  Bar,
-  BarChart,
+  Area,
+  AreaChart,
   CartesianGrid,
   Cell,
   Pie,
@@ -10,128 +12,203 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { AnimatedNumber } from "../ui/Motion";
+import { monthlyMetrics } from "../../utils/dashboardMetrics";
+import ChartTooltip from "./ChartTooltip";
+import EmptyState from "./EmptyState";
 
-export default function DashboardCharts({ deliveries }) {
-  const statusData = [
-    {
-      name: "Livrée",
-      value: deliveries.filter((item) => item.status === "Livrée").length,
-    },
-    {
-      name: "En cours",
-      value: deliveries.filter((item) => item.status === "En cours").length,
-    },
-    {
-      name: "En attente",
-      value: deliveries.filter((item) => item.status === "En attente").length,
-    },
-  ];
-
-  const byEstablishment = Object.values(
-    deliveries.reduce((acc, item) => {
-      if (!acc[item.establishmentName]) {
-        acc[item.establishmentName] = {
-          name: item.establishmentName,
-          livraisons: 0,
-          patients: 0,
-        };
-      }
-
-      acc[item.establishmentName].livraisons += 1;
-      acc[item.establishmentName].patients += item.patients;
-
-      return acc;
-    }, {})
-  );
-
-  const colors = ["#7CBCCC", "#30302F", "#B9E3EA"];
-
+export default function DashboardCharts({ livraisons = [] }) {
+  const monthly = useMemo(() => monthlyMetrics(livraisons), [livraisons]);
+  const delivered = livraisons.filter(
+    (item) => item.statut === "Livrée",
+  ).length;
   return (
-    <section className="mb-8 grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
-      <div className="rounded-[34px] border border-white bg-white/80 p-6 shadow-[0_22px_70px_rgba(48,48,47,0.09)] backdrop-blur-xl">
-        <div className="mb-5">
-          <h2 className="text-2xl font-black tracking-[-0.04em] text-[#30302F]">
-            Livraisons par établissement
-          </h2>
-          <p className="mt-1 text-sm font-semibold text-[#6F7D80]">
-            Vue globale des livraisons et des patients concernés.
-          </p>
+    <div className="charts-grid">
+      <ActivityChart monthly={monthly} />
+      <DeliveryStatus delivered={delivered} total={livraisons.length} />
+    </div>
+  );
+}
+export function ActivityChart({ monthly, large = false }) {
+  const reduced = useReducedMotion();
+  const gradient = useId().replace(/:/g, "");
+  return (
+    <section
+      className="surface chart-panel"
+      aria-label="Évolution des livraisons"
+    >
+      <div className="panel-heading">
+        <div>
+          <h2>Activité des livraisons</h2>
+          <p>Votre historique, mois après mois</p>
         </div>
-
-        <div className="h-[320px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={byEstablishment}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} />
-              <XAxis
-                dataKey="name"
-                tick={{ fontSize: 12, fill: "#6F7D80" }}
-                interval={0}
-                height={70}
-              />
-              <YAxis tick={{ fontSize: 12, fill: "#6F7D80" }} />
-              <Tooltip />
-              <Bar
-                dataKey="livraisons"
-                radius={[12, 12, 0, 0]}
-                fill="#7CBCCC"
-              />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+        <span className="chart-legend">
+          <span>
+            <i />
+            Livraisons
+          </span>
+        </span>
       </div>
-
-      <div className="rounded-[34px] border border-white bg-white/80 p-6 shadow-[0_22px_70px_rgba(48,48,47,0.09)] backdrop-blur-xl">
-        <div className="mb-5">
-          <h2 className="text-2xl font-black tracking-[-0.04em] text-[#30302F]">
-            Statut des livraisons
-          </h2>
-          <p className="mt-1 text-sm font-semibold text-[#6F7D80]">
-            Répartition des livraisons selon leur état.
-          </p>
-        </div>
-
-        <div className="h-[320px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie
-                data={statusData}
-                dataKey="value"
-                nameKey="name"
-                innerRadius={65}
-                outerRadius={105}
-                paddingAngle={4}
-              >
-                {statusData.map((entry, index) => (
-                  <Cell key={entry.name} fill={colors[index]} />
-                ))}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-
-        <div className="grid gap-2">
-          {statusData.map((item, index) => (
-            <div
-              key={item.name}
-              className="flex items-center justify-between rounded-2xl bg-[#F5FAFA] px-4 py-3"
+      {monthly.length ? (
+        <>
+          <div className={`chart-frame ${large ? "chart-frame-large" : ""}`}>
+            <ResponsiveContainer
+              width="100%"
+              height="100%"
+              minWidth={0}
+              initialDimension={{ width: 1, height: large ? 270 : 225 }}
             >
-              <div className="flex items-center gap-2">
-                <span
-                  className="h-3 w-3 rounded-full"
-                  style={{ background: colors[index] }}
+              <AreaChart
+                data={monthly}
+                margin={{ top: 10, right: 8, bottom: 0, left: -25 }}
+                accessibilityLayer
+              >
+                <defs>
+                  <linearGradient id={gradient} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#7CBCCC" stopOpacity={0.27} />
+                    <stop
+                      offset="100%"
+                      stopColor="#7CBCCC"
+                      stopOpacity={0.015}
+                    />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid
+                  stroke="#edf2f5"
+                  strokeDasharray="3 4"
+                  vertical={false}
                 />
-                <span className="text-sm font-black text-[#30302F]">
-                  {item.name}
-                </span>
-              </div>
-              <span className="text-sm font-black text-[#6F7D80]">
-                {item.value}
-              </span>
-            </div>
-          ))}
+                <XAxis
+                  dataKey="label"
+                  tick={{ fontSize: 10, fill: "#607682" }}
+                  tickLine={false}
+                  axisLine={false}
+                  minTickGap={20}
+                  dy={8}
+                />
+                <YAxis
+                  allowDecimals={false}
+                  tick={{ fontSize: 10, fill: "#607682" }}
+                  tickLine={false}
+                  axisLine={false}
+                />
+                <Tooltip content={<ChartTooltip />} />
+                <Area
+                  type="monotone"
+                  dataKey="livraisons"
+                  name="Livraisons"
+                  stroke="#4A9CAF"
+                  strokeWidth={2.5}
+                  fill={`url(#${gradient})`}
+                  dot={monthly.length === 1 ? { r: 4, fill: "#4a9caf" } : false}
+                  activeDot={{ r: 4, stroke: "white", strokeWidth: 3 }}
+                  isAnimationActive={!reduced}
+                  animationDuration={700}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+          <p className="sr-only">
+            {monthly
+              .map((m) => `${m.label} : ${m.livraisons} livraison(s)`)
+              .join(". ")}
+          </p>
+        </>
+      ) : (
+        <EmptyState
+          icon="chart"
+          title="Votre activité commence ici"
+          text="Les premières livraisons enregistrées feront apparaître votre courbe d’activité."
+        />
+      )}
+    </section>
+  );
+}
+export function DeliveryStatus({ delivered, total }) {
+  const reduced = useReducedMotion();
+  const pending = total - delivered;
+  const rate = total ? Math.round((delivered / total) * 100) : 0;
+  const data = [
+    { name: "Livrées", value: delivered },
+    { name: "En attente / en cours", value: pending },
+  ];
+  return (
+    <section
+      className="surface chart-panel"
+      aria-label={`Répartition : ${delivered} livrées et ${pending} en attente ou en cours`}
+    >
+      <div className="panel-heading">
+        <div>
+          <h2>Statut des livraisons</h2>
+          <p>Répartition de votre historique</p>
         </div>
       </div>
+      {total ? (
+        <>
+          <div className="donut-wrap">
+            <ResponsiveContainer
+              width="100%"
+              height="100%"
+              minWidth={0}
+              initialDimension={{ width: 1, height: 184 }}
+            >
+              <PieChart accessibilityLayer>
+                <Pie
+                  data={data}
+                  dataKey="value"
+                  nameKey="name"
+                  innerRadius={61}
+                  outerRadius={78}
+                  startAngle={90}
+                  endAngle={-270}
+                  paddingAngle={delivered && pending ? 4 : 0}
+                  stroke="none"
+                  cornerRadius={5}
+                  isAnimationActive={!reduced}
+                  animationDuration={700}
+                >
+                  {data.map((item, index) => (
+                    <Cell
+                      key={item.name}
+                      fill={index === 0 ? "#4A9CAF" : "#e2ecf1"}
+                    />
+                  ))}
+                </Pie>
+                <Tooltip content={<ChartTooltip />} />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="donut-value">
+              <strong>
+                <AnimatedNumber value={rate} />
+                <small>%</small>
+              </strong>
+              <span>de livraisons livrées</span>
+            </div>
+          </div>
+          <div className="status-legend">
+            <div>
+              <span>
+                <i />
+                Livrées
+              </span>
+              <strong>{delivered.toLocaleString("fr-FR")}</strong>
+            </div>
+            <div>
+              <span>
+                <i className="pending" />
+                En attente / en cours
+              </span>
+              <strong>{pending.toLocaleString("fr-FR")}</strong>
+            </div>
+          </div>
+        </>
+      ) : (
+        <EmptyState
+          icon="truck"
+          title="Aucune livraison enregistrée"
+          text="Les statuts de vos livraisons seront regroupés ici."
+        />
+      )}
     </section>
   );
 }
